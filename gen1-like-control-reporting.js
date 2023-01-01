@@ -102,7 +102,7 @@ function reportDevice(value_type) {
     let e_total = 0;
     for (let i = 0; i < STATE.switches.length; i++) {
       e_total = e_total + STATE.switches[i].energy;
-      publishData(i, numberToStr(STATE.switches[i].energy), value_type);
+      publishData(i, numberToStr(STATE.switches[i].energy * 60), value_type);
     }
 
     publishData(
