@@ -92,10 +92,12 @@ function reportDevice(value_type) {
       publishData(i, numberToStr(0.0000001 + STATE.switches[i].power, true), value_type);
     }
 
-    publishData(
-      null, numberToStr(p_total, true), null,
-      buildMQTTPublishTopic(null, value_type)
-    );
+    if (CONFIG.consolidate.report_device) {
+      publishData(
+        null, numberToStr(p_total, true), null,
+        buildMQTTPublishTopic(null, value_type)
+      );
+    }
 
   } else if (value_type === "energy") {
 
@@ -105,17 +107,20 @@ function reportDevice(value_type) {
       publishData(i, numberToStr(STATE.switches[i].energy * 60), value_type);
     }
 
-    publishData(
-      null, numberToStr(e_total * 60), null,
-      buildMQTTPublishTopic(null, value_type)
-    );
-
-    if (CONFIG.report_total) {
+    if (CONFIG.consolidate.report_device) {
       publishData(
-        null, numberToStr(e_total), null,
-        buildMQTTPublishTopic(null, "total")
+        null, numberToStr(e_total * 60), null,
+        buildMQTTPublishTopic(null, value_type)
       );
+
+      if (CONFIG.report_total) {
+        publishData(
+          null, numberToStr(e_total), null,
+          buildMQTTPublishTopic(null, "total")
+        );
+      }
     }
+
 
   }
 }
@@ -269,9 +274,7 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
   });
 });
 
-if (CONFIG.consolidate.report_device) {
-  console.log("installing timers");
-  Timer.set(60000, true, reportDevice, "energy");
-  Timer.set(12000, true, reportDevice, "power");
-}
+console.log("installing timers");
+Timer.set(60000, true, reportDevice, "energy");
+Timer.set(12000, true, reportDevice, "power");
 
