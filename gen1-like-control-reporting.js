@@ -26,6 +26,8 @@
 // scripts -> library (thanks Shelly!)
 //
 
+let f_zero = 0.0000001;
+
 let CONFIG = {
   debug: false,
   // create and report total in addition
@@ -47,7 +49,6 @@ let STATE = {
   device_info: null,
   mqtt_enabled: false,
   switches: [],
-  init_done: [],
 };
 
 function buildMQTTPublishTopic(switch_id, object_id) {
@@ -181,11 +182,6 @@ function initMQTTSwitch(switch_id) {
   let topic = "shellies/" + STATE.shelly_id + "/relay/" + numberToStr(switch_id, false) + "/command";
   console.log("2to1:", "subscribing to ", topic);
 
-  //report switch status on start
-  Shelly.call("Switch.GetStatus", {id: switch_id}, function (result) {
-    handleEvent(result, null);
-  });
-
   MQTT.subscribe(
     topic,
     function (topic, message, ud) {
@@ -213,6 +209,37 @@ function installHandlers() {
   }, null);
 }
 
+function storeInitValues(result) {
+
+  for (let s in result) {
+
+    if (s.indexOf("input:") === 0) {
+      let id = result[s].id;
+      // report initial input state (if not configured as button)
+      handleEvent({id: id, state: result[s].state}, null);
+    }
+
+    if (s.indexOf("switch:") === 0) {
+      let id = result[s].id;
+      // set initial switch power/energy
+      STATE.switches[id] = {
+        power: (result[s].apower ? result[s].apower : f_zero),
+        energy: result[s].aenergy.total
+      };
+      // report initial power and switch state
+      handleEvent({id: id, apower: STATE.switches[id].power, output: result[s].output}, null);
+
+      // subscribe command topics if we are allowing external
+      // switch control
+      if (CONFIG.switch_handling) {
+        initMQTTSwitch(id);
+      }
+    }
+  }
+
+  installHandlers();
+}
+
 function initMQTT() {
   console.log("2to1:", "loading device config and reporting init values");
 
@@ -224,21 +251,10 @@ function initMQTT() {
           STATE.switches.push(null);
       }
     }
- 
-    for (let switch_id in STATE.switches) {
-      Shelly.call("Switch.GetStatus", {id: switch_id}, function(result) {
-        STATE.switches[result.id] = {power: result.apower, energy: result.aenergy.total};
-        handleEvent({id: result.id, apower: result.apower}, null);
-        if (CONFIG.switch_handling) {
-          initMQTTSwitch(result.id);
-        }
-        
-        STATE.init_done.push(null);
-        if (STATE.init_done.length === STATE.switches.length) {
-          installHandlers();
-        }
-      });
-    }
+
+    Shelly.call("Shelly.GetStatus", {}, function(result) {
+      storeInitValues(result);
+    });
   });
 
   console.log("2to1:", "announcing device");
