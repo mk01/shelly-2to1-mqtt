@@ -51,14 +51,14 @@ let STATE = {
   switches: [],
 };
 
-function buildMQTTPublishTopic(switch_id, object_id) {
+function buildMQTTPublishTopic(component, component_id, object_id) {
   return (
     "shellies" + 
     "/" +
     STATE.shelly_id +
     "/" +
-    "relay" +
-    (switch_id !== null ? "/" + numberToStr(switch_id) : "") +
+    component +
+    (component_id !== null ? "/" + numberToStr(component_id) : "") +
     (typeof object_id !== "undefined" && object_id !== null ? "/" + object_id : "")
   );
 }
@@ -71,9 +71,9 @@ function numberToStr(f, withDecimal) {
   return f;
 }
 
-function publishData(switch_id, value, value_type, topic) {
+function publishData(component, component_id, value, value_type, topic) {
   if (!topic) {
-    topic = buildMQTTPublishTopic(chr(48 + switch_id), value_type);
+    topic = buildMQTTPublishTopic(component, chr(48 + component_id), value_type);
   }
 
   if (CONFIG.debug) {
@@ -90,16 +90,16 @@ function reportDevice(value_type) {
 
   if (value_type === "power") {
 
-    let p_total = 0.0000001;
+    let p_total = f_zero;
     for (let i = 0; i < STATE.switches.length; i++) {
       p_total = p_total + STATE.switches[i].power;
-      publishData(i, numberToStr(0.0000001 + STATE.switches[i].power, true), value_type);
+      publishData("relay", i, numberToStr(f_zero + STATE.switches[i].power, true), value_type);
     }
 
     if (CONFIG.consolidate.report_device) {
-      publishData(
+      publishData(null,
         null, numberToStr(p_total, true), null,
-        buildMQTTPublishTopic(null, value_type)
+        buildMQTTPublishTopic("relay", null, value_type)
       );
     }
 
@@ -108,58 +108,57 @@ function reportDevice(value_type) {
     let e_total = 0;
     for (let i = 0; i < STATE.switches.length; i++) {
       e_total = e_total + STATE.switches[i].energy;
-      publishData(i, numberToStr(STATE.switches[i].energy * 60), value_type);
+      publishData("relay", i, numberToStr(STATE.switches[i].energy * 60), value_type);
     }
 
     if (CONFIG.consolidate.report_device) {
-      publishData(
+      publishData(null,
         null, numberToStr(e_total * 60), null,
-        buildMQTTPublishTopic(null, value_type)
+        buildMQTTPublishTopic("relay", null, value_type)
       );
 
       if (CONFIG.report_total) {
-        publishData(
+        publishData(null,
           null, numberToStr(e_total), null,
-          buildMQTTPublishTopic(null, "total")
+          buildMQTTPublishTopic("relay", null, "total")
         );
       }
     }
-
-
   }
 }
 
 function handleEvent(info, user_data) {
-  let value = null;
-  let value_type = null;
-  
   if (CONFIG.debug) {
     console.log("2to1:", "received raw event data:", JSON.stringify(info));
   }
 
-  if (typeof info.output !== "undefined" && CONFIG.switch_handling === true) {
+  if (typeof info.component !== "undefined" && info.component.indexOf("input:") === 0) {
+    if (typeof info.event !== "undefined") {
+      if (info.event === "single_push") {
+        publishData("input", info.id, "1", null);
+        publishData("input", info.id, "0", null);
+      } else if (info.event === "long_push") {
+        publishData("longpush", info.id, "1", null);
+        publishData("longpush", info.id, "0", null);
+      }
+    }
+  }
 
-    publishData(info.id, (info.output ? "on" : "off"), null);
+  if (typeof info.output !== "undefined") {
+    publishData("relay", info.id, (info.output ? "on" : "off"), null);
+  }
 
+  if (typeof info.state !== "undefined" && info.state !== null) {
+    publishData("input", info.id, (info.state ? "1" : "0"), null);
   }
   
   if (typeof info.apower !== "undefined") {
-
     STATE.switches[info.id].power = info.apower;
-
-  } else if (typeof info.aenergy !== "undefined") {
- 
-    STATE.switches[info.id].energy = info.aenergy.total;
-
-  } else {
-    if (CONFIG.debug) {
-      console.log("not interested, no action");
-    }
-    return;
   }
 
-  if (value && value_type)
-    publishData(info.id, value, value_type);
+  if (typeof info.aenergy !== "undefined") {
+    STATE.switches[info.id].energy = info.aenergy.total;
+  }
 }
 
 function handleMQTTMessage(topic, message, user_data, value) {
@@ -168,13 +167,9 @@ function handleMQTTMessage(topic, message, user_data, value) {
   }
 
   if (user_data.type === "cmd" && value === "announce") {
-
     MQTT.publish("shellies/announce", JSON.stringify(STATE.device_info), 0, false);
-
   } else if (user_data.type === "switchcmd") {
-
     Shelly.call("Switch.Set", {id: user_data.id, on: value});
-
   }
 }
 
@@ -199,12 +194,6 @@ function installHandlers() {
   }, null);
 
   Shelly.addStatusHandler(function(change) {
-    if (change.component.indexOf("switch:") !== 0 ||
-        typeof change.delta.aenergy === "undefined" &&
-        typeof change.delta.output === "undefined") {
-      return;
-    }
-
     handleEvent(change.delta, null);
   }, null);
 }
@@ -296,5 +285,5 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
 
 console.log("2to1:", "installing timers");
 Timer.set(60000, true, reportDevice, "energy");
-Timer.set(12000, true, reportDevice, "power");
+Timer.set(24000, true, reportDevice, "power");
 
