@@ -73,7 +73,7 @@ function publishData(switch_id, value, value_type, topic) {
   }
 
   if (CONFIG.debug) {
-    console.log("mqtt publish to", topic, " value ", value);
+    console.log("2to1:", "mqtt publish to", topic, " value ", value);
   }
 
   MQTT.publish(
@@ -130,7 +130,7 @@ function handleEvent(info, user_data) {
   let value_type = null;
   
   if (CONFIG.debug) {
-    console.log("received raw event data:", JSON.stringify(info));
+    console.log("2to1:", "received raw event data:", JSON.stringify(info));
   }
 
   if (typeof info.output !== "undefined" && CONFIG.switch_handling === true) {
@@ -160,7 +160,7 @@ function handleEvent(info, user_data) {
 
 function handleMQTTMessage(topic, message, user_data, value) {
   if (CONFIG.debug) {
-    console.log("handling message: ", message, ", in topic: ", topic, ", data: ", JSON.stringify(user_data), ", value: ", value);
+    console.log("2to1:", "handling message: ", message, ", in topic: ", topic, ", data: ", JSON.stringify(user_data), ", value: ", value);
   }
 
   if (user_data.type === "cmd" && value === "announce") {
@@ -176,7 +176,7 @@ function handleMQTTMessage(topic, message, user_data, value) {
 
 function initMQTTSwitch(switch_id) {
   let topic = "shellies/" + STATE.shelly_id + "/relay/" + numberToStr(switch_id, false) + "/command";
-  console.log("subscribing to ", topic);
+  console.log("2to1:", "subscribing to ", topic);
 
   //report switch status on start
   Shelly.call("Switch.GetStatus", {id: switch_id}, function (result) {
@@ -193,7 +193,7 @@ function initMQTTSwitch(switch_id) {
 }
 
 function installHandlers() {
-  console.log("installing event handlers");
+  console.log("2to1:", "installing event handlers");
 
   Shelly.addEventHandler(function(event, user_data) {
     handleEvent(event.info, user_data);
@@ -211,7 +211,8 @@ function installHandlers() {
 }
 
 function initMQTT() {
-  console.log("loading device config and reporting init values");
+  console.log("2to1:", "loading device config and reporting init values");
+
   Shelly.call("Shelly.GetConfig", {}, function (result) {
     for (let o in result) {
       if (o.indexOf("switch:") === 0) {
@@ -236,8 +237,8 @@ function initMQTT() {
       });
     }
   });
-  
-  console.log("announcing device");
+
+  console.log("2to1:", "announcing device");
   MQTT.publish(
     "shellies/" + STATE.shelly_id + "/announce",
     JSON.stringify(STATE.device_info),
@@ -245,7 +246,7 @@ function initMQTT() {
     true
   );
 
-  console.log("subscribing to shellies/command");
+  console.log("2to1:", "subscribing to shellies/command");
   MQTT.subscribe(
     "shellies/command",
     function (topic, message, ud) {
@@ -274,7 +275,7 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
   });
 });
 
-console.log("installing timers");
+console.log("2to1:", "installing timers");
 Timer.set(60000, true, reportDevice, "energy");
 Timer.set(12000, true, reportDevice, "power");
 
