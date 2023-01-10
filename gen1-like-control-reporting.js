@@ -57,14 +57,17 @@ function buildMQTTPublishTopic(switch_id, object_id) {
     STATE.shelly_id +
     "/" +
     "relay" +
-    (switch_id ? "/" + switch_id : "") +
-    (object_id ? "/" + object_id : "")
+    (switch_id !== null ? "/" + numberToStr(switch_id) : "") +
+    (typeof object_id !== "undefined" && object_id !== null ? "/" + object_id : "")
   );
 }
 
 function numberToStr(f, withDecimal) {
-  if (!withDecimal) f = Math.round(f);
-  return JSON.stringify(f);
+  if (typeof f === "number") {
+    if (!withDecimal) f = Math.round(f);
+    return JSON.stringify(f);
+  }
+  return f;
 }
 
 function publishData(switch_id, value, value_type, topic) {
