@@ -127,36 +127,38 @@ function reportDevice(value_type) {
   }
 }
 
-function handleEvent(info, user_data) {
+function handleEventInput(info, user_data) {
   if (CONFIG.debug) {
     console.log("2to1:", "received raw event data:", JSON.stringify(info));
   }
 
-  if (typeof info.component !== "undefined" && info.component.indexOf("input:") === 0) {
-    if (typeof info.event !== "undefined") {
-      if (info.event === "single_push") {
-        publishData("input", info.id, "1", null);
-        publishData("input", info.id, "0", null);
-      } else if (info.event === "long_push") {
-        publishData("longpush", info.id, "1", null);
-        publishData("longpush", info.id, "0", null);
-      }
-    }
+  if (info.event && info.event === "single_push") {
+    publishData("input", info.id, "1");
+    publishData("input", info.id, "0");
+  } else if (info.event && info.event === "long_push") {
+    publishData("longpush", info.id, "1");
+    publishData("longpush", info.id, "0");
+  }
+
+  if (typeof info.state !== "undefined") {
+    publishData("input", info.id, (info.state ? "1" : "0"));
+  }
+}
+
+function handleEventSwitch(info, user_data) {
+  if (CONFIG.debug) {
+    console.log("2to1:", "received raw event data:", JSON.stringify(info));
   }
 
   if (typeof info.output !== "undefined") {
-    publishData("relay", info.id, (info.output ? "on" : "off"), null);
-  }
-
-  if (typeof info.state !== "undefined" && info.state !== null) {
-    publishData("input", info.id, (info.state ? "1" : "0"), null);
+    publishData("relay", info.id, (info.output ? "on" : "off"));
   }
   
-  if (typeof info.apower !== "undefined") {
+  if (info.apower) {
     STATE.switches[info.id].power = info.apower;
   }
 
-  if (typeof info.aenergy !== "undefined") {
+  if (info.aenergy) {
     STATE.switches[info.id].energy = info.aenergy.total;
   }
 }
@@ -186,16 +188,23 @@ function initMQTTSwitch(switch_id) {
   );
 }
 
+function handleEvent(component, info, ud) {
+  if (component.indexOf("input:") === 0)
+    handleEventInput(info, ud)
+  else if (component.indexOf("switch:") === 0)
+    handleEventSwitch(info, ud);
+}
+
 function installHandlers() {
   console.log("2to1:", "installing event handlers");
 
   Shelly.addEventHandler(function(event, user_data) {
-    handleEvent(event.info, user_data);
-  }, null);
+    handleEvent(event.component, event.info);
+  });
 
   Shelly.addStatusHandler(function(change) {
-    handleEvent(change.delta, null);
-  }, null);
+    handleEvent(change.component, change.delta);
+  });
 }
 
 function storeInitValues(result) {
@@ -205,7 +214,10 @@ function storeInitValues(result) {
     if (s.indexOf("input:") === 0) {
       let id = result[s].id;
       // report initial input state (if not configured as button)
-      handleEvent({id: id, state: result[s].state}, null);
+      handleEventInput({
+        id: id,
+        state: result[s].state
+      });
     }
 
     if (s.indexOf("switch:") === 0) {
@@ -216,7 +228,11 @@ function storeInitValues(result) {
         energy: result[s].aenergy.total
       };
       // report initial power and switch state
-      handleEvent({id: id, apower: STATE.switches[id].power, output: result[s].output}, null);
+      handleEventSwitch({
+        id: id,
+        apower: STATE.switches[id].power,
+        output: result[s].output
+      });
 
       // subscribe command topics if we are allowing external
       // switch control
@@ -286,4 +302,3 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
 console.log("2to1:", "installing timers");
 Timer.set(60000, true, reportDevice, "energy");
 Timer.set(24000, true, reportDevice, "power");
-
