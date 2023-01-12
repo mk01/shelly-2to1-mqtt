@@ -36,7 +36,7 @@ let CONFIG = {
   consolidate: {
     // report aggregated power and energy
     // for whole device in addition to
-    // per switch reports
+    // individual switches
     report_device: false,
   },
   // report state and allow control
