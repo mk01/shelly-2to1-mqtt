@@ -4,9 +4,9 @@ Currently this is supported:
 - power/energy sensor
 - total sensor (if enabled - reports total energy as additional sensor)
 - switch status and control
-
-To be implemented:
 - inputs
+    - as a switch
+    - as a button (single- and long-press supported at the moment)
 
 Script is developed and tested on Shelly Pro 4PM devices, but should work on any Gen2 device providing similar sensors/switches.
 
