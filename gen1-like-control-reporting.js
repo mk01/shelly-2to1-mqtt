@@ -163,15 +163,15 @@ function handleEventSwitch(info, user_data) {
   }
 }
 
-function handleMQTTMessage(topic, message, user_data, value) {
+function handleMQTTMessage(topic, message, user_data) {
   if (CONFIG.debug) {
-    console.log("2to1:", "handling message: ", message, ", in topic: ", topic, ", data: ", JSON.stringify(user_data), ", value: ", value);
+    console.log("2to1:", "handling message: ", message, ", in topic: ", topic, ", data: ", JSON.stringify(user_data));
   }
 
-  if (user_data.type === "cmd" && value === "announce") {
+  if (user_data.type === "generic" && message === "announce") {
     MQTT.publish("shellies/announce", JSON.stringify(STATE.device_info), 0, false);
-  } else if (user_data.type === "switchcmd") {
-    Shelly.call("Switch.Set", {id: user_data.id, on: value});
+  } else if (user_data.type === "switch") {
+    Shelly.call("Switch.Set", {id: user_data.id, on: (message === "on" ? true : false)});
   }
 }
 
@@ -181,10 +181,8 @@ function initMQTTSwitch(switch_id) {
 
   MQTT.subscribe(
     topic,
-    function (topic, message, ud) {
-      handleMQTTMessage(topic, message, ud, message === "on" ? true : false);
-    },
-    {type: "switchcmd", id: switch_id}
+    handleMQTTMessage,
+    {type: "switch", id: switch_id}
   );
 }
 
@@ -273,10 +271,8 @@ function initMQTT() {
   console.log("2to1:", "subscribing to shellies/command");
   MQTT.subscribe(
     "shellies/command",
-    function (topic, message, ud) {
-      handleMQTTMessage(topic, message, ud, message);
-    },
-    {type: "cmd"}
+    handleMQTTMessage,
+    {type: "generic"}
   );
 }
 
