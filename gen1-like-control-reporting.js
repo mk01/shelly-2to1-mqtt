@@ -154,7 +154,7 @@ function handleEventSwitch(info, user_data) {
     publishData("relay", info.id, (info.output ? "on" : "off"));
   }
   
-  if (info.apower) {
+  if (typeof info.apower !== "undefined") {
     STATE.switches[info.id].power = info.apower;
   }
 
