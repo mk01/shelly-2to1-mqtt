@@ -2,7 +2,7 @@
 Extension to Shelly Gen2 devices to enable Gen1 compatible (Shelly)MQTT reporting and control.
 Currently this is supported:
 - power/energy sensor
-- total sensor (if enabled - reports total energy as additional sensor)
+- current/voltage/pf sensors
 - switch status and control
 - inputs
     - as a switch

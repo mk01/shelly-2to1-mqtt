@@ -39,6 +39,8 @@ let CONFIG = {
     // individual switches
     report_device: false,
   },
+  // report voltage/current/pf
+  report_switch_other: true,
   // report state and allow control
   // of switches
   switch_handling: true,
@@ -124,6 +126,20 @@ function reportDevice(value_type) {
         );
       }
     }
+
+  } else if (value_type === "switch_other" && CONFIG.report_switch_other) {
+
+    for (let i = 0; i < STATE.switches.length; i++) {
+      if (!STATE.switches[i].cvpf || !STATE.switches[i].cvpf.changed) {
+        continue
+      }
+
+      STATE.switches[i].cvpf.changed = false;
+      publishData("relay", i, numberToStr(STATE.switches[i].cvpf.current, true), "current");
+      publishData("relay", i, numberToStr(STATE.switches[i].cvpf.voltage, true), "voltage");
+      publishData("relay", i, numberToStr(STATE.switches[i].cvpf.pf, true), "pf");
+    }
+
   }
 }
 
@@ -160,6 +176,28 @@ function handleEventSwitch(info, user_data) {
 
   if (info.aenergy) {
     STATE.switches[info.id].energy = info.aenergy.total;
+  }
+
+  if (STATE.switches[info.id].cvpf === null) {
+    return
+  }
+
+  if (typeof info.current !== "undefined") {
+    STATE.switches[info.id].cvpf.changed = STATE.switches[info.id].cvpf.changed ||
+      STATE.switches[info.id].cvpf.current !== info.current;
+    STATE.switches[info.id].cvpf.current = info.current;
+  }
+
+  if (typeof info.voltage !== "undefined") {
+    STATE.switches[info.id].cvpf.changed = STATE.switches[info.id].cvpf.changed ||
+      STATE.switches[info.id].cvpf.voltage !== info.voltage;
+    STATE.switches[info.id].cvpf.voltage = info.voltage;
+  }
+
+  if (typeof info.pf !== "undefined") {
+    STATE.switches[info.id].cvpf.changed = STATE.switches[info.id].cvpf.changed ||
+      STATE.switches[info.id].cvpf.pf !== info.pf;
+    STATE.switches[info.id].cvpf.pf = info.pf;
   }
 }
 
@@ -222,13 +260,25 @@ function storeInitValues(result) {
       let id = result[s].id;
       // set initial switch power/energy
       STATE.switches[id] = {
-        power: (result[s].apower ? result[s].apower : f_zero),
-        energy: result[s].aenergy.total
+        power:   (result[s].apower ? result[s].apower : f_zero),
+        energy:  result[s].aenergy.total,
+        cvpf:    null
       };
-      // report initial power and switch state
+
+      if (typeof result[s].current !== "undefined") {
+        STATE.switches[id].cvpf = {
+          current: (result[s].current ? result[s].current : f_zero),
+          voltage: (result[s].voltage ? result[s].voltage : f_zero),
+          pf:      (result[s].pf ? result[s].pf : f_zero),
+          changed: true,
+        };
+      } else {
+        CONFIG.report_switch_other = false;
+      }
+
+      // report initial switch state
       handleEventSwitch({
         id: id,
-        apower: STATE.switches[id].power,
         output: result[s].output
       });
 
@@ -298,3 +348,4 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
 console.log("2to1:", "installing timers");
 Timer.set(60000, true, reportDevice, "energy");
 Timer.set(24000, true, reportDevice, "power");
+Timer.set(5500, true, reportDevice, "switch_other");
