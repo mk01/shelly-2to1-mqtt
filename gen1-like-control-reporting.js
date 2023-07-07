@@ -42,6 +42,11 @@ let CONFIG = {
   // report state and allow control
   // of switches
   switch_handling: true,
+  // forced (status) update
+  // (run rpc getStatus)
+  // interval in seconds.
+  // 0 = disabled
+  forced_update: 0,
 };
 
 let STATE = {
@@ -298,3 +303,21 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
 console.log("2to1:", "installing timers");
 Timer.set(60000, true, reportDevice, "energy");
 Timer.set(24000, true, reportDevice, "power");
+
+function forceUpdate() {
+  console.log("2to1:", "forcing energy update");
+
+  Shelly.call("Shelly.GetStatus", {}, function(result) {
+    for (let s in result) {
+      if (s.indexOf("switch:") === 0) {
+        let id = result[s].id;
+        handleEventSwitch({"id": id, "aenergy": result[s].aenergy, "apower": result[s].apower});
+      }
+    }
+  });
+}
+
+if (CONFIG.forced_update > 0) {
+    console.log("2to1:", "enabling forced status update");
+    Timer.set(CONFIG.forced_update * 1000, true, forceUpdate);
+}
