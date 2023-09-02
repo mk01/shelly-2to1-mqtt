@@ -47,6 +47,10 @@ let CONFIG = {
   // interval in seconds.
   // 0 = disabled
   forced_update: 0,
+  // intervals to send fresh
+  // date via MQTT (in seconds)
+  energy_report_interval: 60,
+  power_report_interval: 24
 };
 
 let STATE = {
@@ -301,8 +305,8 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
 });
 
 console.log("2to1:", "installing timers");
-Timer.set(60000, true, reportDevice, "energy");
-Timer.set(24000, true, reportDevice, "power");
+Timer.set(CONFIG.energy_report_interval * 1000, true, reportDevice, "energy");
+Timer.set(CONFIG.power_report_interval * 1000, true, reportDevice, "power");
 
 function forceUpdate() {
   console.log("2to1:", "forcing energy update");
