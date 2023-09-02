@@ -26,7 +26,7 @@
 // scripts -> library (thanks Shelly!)
 //
 
-let f_zero = 0.0000001;
+let f_zero = ".00";
 
 let CONFIG = {
   debug: false,
@@ -72,11 +72,21 @@ function buildMQTTPublishTopic(component, component_id, object_id) {
 }
 
 function numberToStr(f, withDecimal) {
-  if (typeof f === "number") {
-    if (!withDecimal) f = Math.round(f);
-    return JSON.stringify(f);
+  if (typeof f !== "number") {
+    return f;
   }
-  return f;
+
+  let f_str = JSON.stringify(f);
+
+  if (withDecimal) {
+    if (f_str.indexOf(".") === -1) {
+      return f_str + f_zero;
+    }
+    return f_str;
+  }
+
+  f = Math.round(f);
+  return JSON.stringify(f);
 }
 
 function publishData(component, component_id, value, value_type, topic) {
@@ -98,10 +108,10 @@ function reportDevice(value_type) {
 
   if (value_type === "power") {
 
-    let p_total = f_zero;
+    let p_total = 0.00;
     for (let i = 0; i < STATE.switches.length; i++) {
       p_total = p_total + STATE.switches[i].power;
-      publishData("relay", i, numberToStr(f_zero + STATE.switches[i].power, true), value_type);
+      publishData("relay", i, numberToStr(STATE.switches[i].power, true), value_type);
     }
 
     if (CONFIG.consolidate.report_device) {
@@ -233,7 +243,7 @@ function storeInitValues(result) {
       let id = result[s].id;
       // set initial switch power/energy
       STATE.switches[id] = {
-        power: (result[s].apower ? result[s].apower : f_zero),
+        power: (result[s].apower ? result[s].apower : 0.00),
         energy: result[s].aenergy.total
       };
       // report initial power and switch state
