@@ -42,11 +42,6 @@ let CONFIG = {
   // report state and allow control
   // of switches
   switch_handling: true,
-  // forced (status) update
-  // (run rpc getStatus)
-  // interval in seconds.
-  // 0 = disabled
-  forced_update: 0,
   // intervals to send fresh
   // date via MQTT (in seconds)
   energy_report_interval: 60,
@@ -59,6 +54,10 @@ let STATE = {
   mqtt_enabled: false,
   switches: [],
 };
+
+function getTime() {
+  return Shelly.getComponentStatus("sys").unixtime;
+}
 
 function buildMQTTPublishTopic(component, component_id, object_id) {
   return (
@@ -113,6 +112,8 @@ function reportDevice(value_type) {
     }
 
   } else if (value_type === "energy") {
+
+    forceUpdate();
 
     let e_total = 0;
     for (let i = 0; i < STATE.switches.length; i++) {
@@ -169,6 +170,7 @@ function handleEventSwitch(info, user_data) {
 
   if (info.aenergy) {
     STATE.switches[info.id].energy = info.aenergy.total;
+    STATE.switches[info.id].updated = getTime();
   }
 }
 
@@ -311,17 +313,14 @@ Timer.set(CONFIG.power_report_interval * 1000, true, reportDevice, "power");
 function forceUpdate() {
   console.log("2to1:", "forcing energy update");
 
-  Shelly.call("Shelly.GetStatus", {}, function(result) {
-    for (let s in result) {
-      if (s.indexOf("switch:") === 0) {
-        let id = result[s].id;
-        handleEventSwitch({"id": id, "aenergy": result[s].aenergy, "apower": result[s].apower});
-      }
-    }
-  });
-}
+  let time = getTime();
+  for (let i = 0; i < STATE.switches.length; i++) {
+    if ((STATE.switches[i].updated + CONFIG.energy_report_interval) > time)
+      continue;
 
-if (CONFIG.forced_update > 0) {
-    console.log("2to1:", "enabling forced status update");
-    Timer.set(CONFIG.forced_update * 1000, true, forceUpdate);
+    handleEventSwitch({
+      id: i,
+      aenergy: Shelly.getComponentStatus(component, id).aenergy
+    });
+  }
 }
