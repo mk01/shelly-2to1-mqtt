@@ -26,7 +26,7 @@
 // scripts -> library (thanks Shelly!)
 //
 
-let f_zero = 0.0000001;
+let f_zero = ".00";
 
 let CONFIG = {
   debug: false,
@@ -44,6 +44,11 @@ let CONFIG = {
   // report state and allow control
   // of switches
   switch_handling: true,
+  // intervals to send fresh
+  // date via MQTT (in seconds)
+  energy_report_interval: 60,
+  power_report_interval: 24,
+  ovpf_report_interval: 5.50
 };
 
 let STATE = {
@@ -52,6 +57,10 @@ let STATE = {
   mqtt_enabled: false,
   switches: [],
 };
+
+function getTime() {
+  return Shelly.getComponentStatus("sys").unixtime;
+}
 
 function buildMQTTPublishTopic(component, component_id, object_id) {
   return (
@@ -66,11 +75,21 @@ function buildMQTTPublishTopic(component, component_id, object_id) {
 }
 
 function numberToStr(f, withDecimal) {
-  if (typeof f === "number") {
-    if (!withDecimal) f = Math.round(f);
-    return JSON.stringify(f);
+  if (typeof f !== "number") {
+    return f;
   }
-  return f;
+
+  let f_str = JSON.stringify(f);
+
+  if (withDecimal) {
+    if (f_str.indexOf(".") === -1) {
+      return f_str + f_zero;
+    }
+    return f_str;
+  }
+
+  f = Math.round(f);
+  return JSON.stringify(f);
 }
 
 function publishData(component, component_id, value, value_type, topic) {
@@ -92,10 +111,10 @@ function reportDevice(value_type) {
 
   if (value_type === "power") {
 
-    let p_total = f_zero;
+    let p_total = 0.00;
     for (let i = 0; i < STATE.switches.length; i++) {
       p_total = p_total + STATE.switches[i].power;
-      publishData("relay", i, numberToStr(f_zero + STATE.switches[i].power, true), value_type);
+      publishData("relay", i, numberToStr(STATE.switches[i].power, true), value_type);
     }
 
     if (CONFIG.consolidate.report_device) {
@@ -106,6 +125,8 @@ function reportDevice(value_type) {
     }
 
   } else if (value_type === "energy") {
+
+    forceUpdate();
 
     let e_total = 0;
     for (let i = 0; i < STATE.switches.length; i++) {
@@ -136,7 +157,7 @@ function reportDevice(value_type) {
 
       STATE.switches[i].cvpf.changed = false;
       publishData("relay", i, numberToStr(STATE.switches[i].cvpf.current, true), "current");
-      publishData("relay", i, numberToStr(STATE.switches[i].cvpf.voltage, true), "voltage");
+      publishData("relay", i, numberToStr(STATE.switches[i].cvpf.voltage, true), "voltage")
       publishData("relay", i, numberToStr(STATE.switches[i].cvpf.pf, true), "pf");
     }
 
@@ -176,6 +197,7 @@ function handleEventSwitch(info, user_data) {
 
   if (info.aenergy) {
     STATE.switches[info.id].energy = info.aenergy.total;
+    STATE.switches[info.id].updated = getTime();
   }
 
   if (STATE.switches[info.id].cvpf === null) {
@@ -260,9 +282,9 @@ function storeInitValues(result) {
       let id = result[s].id;
       // set initial switch power/energy
       STATE.switches[id] = {
-        power:   (result[s].apower ? result[s].apower : f_zero),
-        energy:  result[s].aenergy.total,
-        cvpf:    null
+        power:  (result[s].apower ? result[s].apower : 0.00),
+        energy: result[s].aenergy.total
+        cvpf:   null
       };
 
       if (typeof result[s].current !== "undefined") {
@@ -346,6 +368,21 @@ Shelly.call("Shelly.GetDeviceInfo", {}, function (result) {
 });
 
 console.log("2to1:", "installing timers");
-Timer.set(60000, true, reportDevice, "energy");
-Timer.set(24000, true, reportDevice, "power");
-Timer.set(5500, true, reportDevice, "switch_other");
+Timer.set(CONFIG.energy_report_interval * 1000, true, reportDevice, "energy");
+Timer.set(CONFIG.power_report_interval * 1000, true, reportDevice, "power");
+Timer.set(CONFIG.ovpf_report_interval * 1000, true, reportDevice, "switch_other");
+
+function forceUpdate() {
+  console.log("2to1:", "forcing energy update");
+
+  let time = getTime();
+  for (let i = 0; i < STATE.switches.length; i++) {
+    if ((STATE.switches[i].updated + CONFIG.energy_report_interval) > time)
+      continue;
+
+    handleEventSwitch({
+      id: i,
+      aenergy: Shelly.getComponentStatus(component, id).aenergy
+    });
+  }
+}
