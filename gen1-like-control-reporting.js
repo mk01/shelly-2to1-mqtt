@@ -185,6 +185,13 @@ function handleEventSwitch(info, user_data) {
 }
 
 function handleMQTTMessage(topic, message, user_data) {
+  if (message === "undefined" || message === "") {
+    if (CONFIG.debug) {
+      console.log("2to1:", "ignoring empty message received in topic: ", topic, ", data: ", JSON.stringify(user_data));
+      return;
+    }
+  }
+
   if (CONFIG.debug) {
     console.log("2to1:", "handling message: ", message, ", in topic: ", topic, ", data: ", JSON.stringify(user_data));
   }
@@ -192,7 +199,8 @@ function handleMQTTMessage(topic, message, user_data) {
   if (user_data.type === "generic" && message === "announce") {
     MQTT.publish("shellies/announce", JSON.stringify(STATE.device_info), 0, false);
   } else if (user_data.type === "switch") {
-    Shelly.call("Switch.Set", {id: user_data.id, on: (message === "on" ? true : false)});
+    console.log("2to1:", "calling switch.set, id: ", user_data.id, ", command: ", message);
+    Shelly.call("Switch.Set", {id: user_data.id, on: (message === "off" ? false : true)});
   }
 }
 
