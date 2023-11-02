@@ -188,8 +188,8 @@ function handleMQTTMessage(topic, message, user_data) {
   if (message === "undefined" || message === "") {
     if (CONFIG.debug) {
       console.log("2to1:", "ignoring empty message received in topic: ", topic, ", data: ", JSON.stringify(user_data));
-      return;
     }
+    return;
   }
 
   if (CONFIG.debug) {
