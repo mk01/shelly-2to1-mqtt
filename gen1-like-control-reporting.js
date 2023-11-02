@@ -53,6 +53,7 @@ let STATE = {
   device_info: null,
   mqtt_enabled: false,
   switches: [],
+  energy_metering: false,
 };
 
 function getTime() {
@@ -121,7 +122,7 @@ function reportDevice(value_type) {
       );
     }
 
-  } else if (value_type === "energy") {
+  } else if (value_type === "energy" && STATE.energy_metering) {
 
     forceUpdate();
 
@@ -178,14 +179,14 @@ function handleEventSwitch(info, user_data) {
     STATE.switches[info.id].power = info.apower;
   }
 
-  if (info.aenergy) {
+  if (info.aenergy && STATE.energy_metering) {
     STATE.switches[info.id].energy = info.aenergy.total;
     STATE.switches[info.id].updated = getTime();
   }
 }
 
 function handleMQTTMessage(topic, message, user_data) {
-  if (message === "undefined" || message === "") {
+  if (typeof message === "undefined" || message === "") {
     if (CONFIG.debug) {
       console.log("2to1:", "ignoring empty message received in topic: ", topic, ", data: ", JSON.stringify(user_data));
     }
@@ -250,9 +251,13 @@ function storeInitValues(result) {
     if (s.indexOf("switch:") === 0) {
       let id = result[s].id;
       // set initial switch power/energy
+      let has_energy = (result[s].aenergy && typeof result[s].aenergy.total !== "undefined");
+      if (has_energy) {
+        STATE.energy_metering = true;
+      }
       STATE.switches[id] = {
         power: (result[s].apower ? result[s].apower : 0.00),
-        energy: result[s].aenergy.total
+        energy: (has_energy ? result[s].aenergy.total : 0)
       };
       // report initial power and switch state
       handleEventSwitch({
